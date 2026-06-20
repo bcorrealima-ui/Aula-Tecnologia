@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang='pt-BR'>
+<head>
+<meta charset='UTF-8'>
+<title>Spend Analytics Fornecedores</title>
+<script src='https://cdn.jsdelivr.net/npm/chart.js'></script>
+<script src='https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js'></script>
+<style>
+body{font-family:Arial;background:#f3f5f7;margin:0}
+header{background:#17365d;color:white;padding:20px;text-align:center}
+nav{padding:15px;background:white}
+button{background:#17365d;color:white;padding:10px;margin:5px;border:0}
+.tab{display:none;padding:20px}.active{display:block}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px}
+.card,.box{background:white;padding:20px;margin:15px;border-radius:10px}
+table{width:100%;border-collapse:collapse}
+td,th{padding:8px;border:1px solid #ddd}
+.alert{background:#fff3cd;padding:10px;margin:10px}
+</style>
+</head>
+<body>
+
+<header>
+<h1>Spend Analytics - Fornecedores</h1>
+<p>Descritivo | Preditivo | Anomalias</p>
+</header>
+
+<nav>
+<button onclick="openTab('exec')">Executivo</button>
+<button onclick="openTab('desc')">Descritivo</button>
+<button onclick="openTab('matriz')">Matriz Fornecedor x Categoria</button>
+<button onclick="openTab('pred')">Preditivo</button>
+<button onclick="openTab('ins')">Insights</button>
+</nav>
+
+<div class='box'>
+<input type='file' id='csv'>
+</div>
+
+<div id='exec' class='tab active'>
+<div class='cards'>
+<div class='card'>Spend Total<h2 id='total'>0</h2></div>
+<div class='card'>Pedidos<h2 id='pedidos'>0</h2></div>
+<div class='card'>Fornecedores<h2 id='forn'>0</h2></div>
+<div class='card'>OTD<h2 id='otd'>0</h2></div>
+</div>
+</div>
+
+<div id='desc' class='tab'>
+<div class='box'><canvas id='categoria'></canvas></div>
+<div class='box'><canvas id='fornecedor'></canvas></div>
+</div>
+
+<div id='matriz' class='tab'>
+<div class='box'>
+<h2>Matriz fornecedor x categoria</h2>
+<table id='tabela'></table>
+</div>
+</div>
+
+<div id='pred' class='tab'>
+<div class='box'>
+<h2>Análise Preditiva</h2>
+<p id='previsao'>Aguardando dados...</p>
+</div>
+</div>
+
+<div id='ins' class='tab'>
+<div class='box'>
+<h2>Alertas</h2>
+<div id='alertas'></div>
+</div>
+</div>
+
+<script>
+let dados=[];
+
+function openTab(id){
+document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+document.getElementById(id).classList.add('active');
+}
+
+csv.onchange=e=>{
+Papa.parse(e.target.files[0],{
+header:true,
+skipEmptyLines:true,
+complete:r=>{
+dados=r.data;
+analise();
+}
+});
+}
+
+function analise(){
+
+let total=dados.reduce((a,b)=>a+Number(b.valor_brl||0),0);
+document.getElementById('total').innerHTML=total.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+document.getElementById('pedidos').innerHTML=dados.length;
+document.getElementById('forn').innerHTML=new Set(dados.map(x=>x.fornecedor_razao)).size;
+document.getElementById('otd').innerHTML=(dados.reduce((a,b)=>a+Number(b.otd_dias||0),0)/dados.length).toFixed(1);
+
+let cat={};
+let forn={};
+
+dados.forEach(x=>{
+cat[x.categoria]=(cat[x.categoria]||0)+Number(x.valor_brl||0);
+forn[x.fornecedor_razao]=(forn[x.fornecedor_razao]||0)+Number(x.valor_brl||0);
+});
+
+new Chart(categoria,{type:'bar',data:{labels:Object.keys(cat),datasets:[{data:Object.values(cat)}]}});
+
+new Chart(fornecedor,{type:'bar',data:{labels:Object.keys(forn).slice(0,10),datasets:[{data:Object.values(forn).slice(0,10)}]}});
+
+let cats=[...new Set(dados.map(x=>x.categoria))];
+let matriz={};
+
+dados.forEach(x=>{
+if(!matriz[x.fornecedor_razao])matriz[x.fornecedor_razao]={};
+matriz[x.fornecedor_razao][x.categoria]=(matriz[x.fornecedor_razao][x.categoria]||0)+Number(x.valor_brl||0);
+});
+
+let h='<tr><th>Fornecedor</th>'+cats.map(c=>'<th>'+c+'</th>').join('')+'</tr>';
+
+Object.keys(matriz).forEach(f=>{
+h+='<tr><td>'+f+'</td>'+cats.map(c=>'<td>'+(matriz[f][c]||0)+'</td>').join('')+'</tr>';
+});
+
+tabela.innerHTML=h;
+
+previsao.innerHTML='Projeção futura estimada: '+(total*1.08).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+
+alertas.innerHTML='<div class="alert">Analise fornecedores com alta concentração de gasto e categorias exclusivas.</div>';
+
+}
+</script>
+</body>
+</html>
